@@ -55,6 +55,8 @@
 
 #include <ming.h>
 
+#define abs(x) ((x) > 0 ? (x) : -1*(x))
+
 /* Globals needed by sig handler */
 char *OutputSWF = NULL;
 char *OutputFLV = NULL;
@@ -63,7 +65,9 @@ int   MovieWidth;
 int   MovieHeight;
 
 unsigned char *backing = NULL;
-int backingx = 0, backingy = 0, curs_width = 0, curs_height = 0;
+int backingx = 0, backingy = 0, backingw = 0, backingh = 0; 
+
+int curs_width = 0, curs_height = 0;
 
 typedef unsigned short ush;
 
@@ -90,11 +94,11 @@ cursor_clear_scratch(Display       *xdpy,
   if (backing != NULL)
     {
       p = scratch + (MovieWidth * backingy * 3) + (backingx * 3);
-      for (y=0; y < curs_height; y++)
+      for (y=0; y < backingh; y++)
 	{
 	  memcpy(p,
-		 backing + (y * curs_width * 3), 
-		 (curs_width * 3));
+		 backing + (y * backingw * 3), 
+		 (backingw * 3));
 	  p += (MovieWidth * 3);
 	}
       
@@ -111,37 +115,57 @@ cursor_to_scratch(Display       *xdpy,
   if ((curs = XFixesGetCursorImage (xdpy)) != NULL)
     {
       unsigned char *p;
-      int x, y, i = 0, srcx = 0, srcy = 0;
-
-      if (curs->x + curs->width < 0
-	  || curs->y + curs->height < 0
-	  || curs->x > MovieWidth
-	  || curs->y > MovieHeight)
+      int x, y, i = 0, srcw = 0, srch = 0, srcx = 0, srcy = 0, dstx =0, dsty =0 ;
+      if (curs->x + curs->width < 0 || curs->y + curs->height < 0
+	  || curs->x > MovieWidth || curs->y > MovieHeight)
 	return; 		/* offscreen */
 
-      curs_width = curs->width;
+      /* 'clip' */
+      srcx = curs->x; srcy = curs->y;
+      srch = curs->height; srcw = curs->width;
+
+      /*
+      printf("src x before xlip %i, %i, %ix%i\n", srcx, srcy, curs->xhot, curs->yhot);
+      */
+
+      if (srcx < 0) 
+	srcx = 0, srcw = curs->width + curs->x;
+
+      if (srcy < 0) 
+	srcy = 0, srch = curs->height + curs->y;
+
+      if ((srcx + srcw) > MovieWidth)
+	  srcw = MovieWidth - srcx;
+
+      if ((srcy + srch) > MovieHeight)
+	  srch = MovieHeight - srcy;
+
+      curs_width  = curs->width;
       curs_height = curs->height;
 
-      backing = malloc(curs->height * curs->width * 3);
+      backing = malloc(srcw * srch * 3);
 
-      p = scratch + (MovieWidth * curs->y * 3) + (curs->x * 3);
+      p = scratch + (MovieWidth * srcy * 3) + (srcx * 3);
 
       /* Make a copy of what were about write over */
-      backingx = curs->x; backingy = curs->y;
+      backingx = srcx; backingy = srcy;
+      backingw = srcw; backingh = srch;
 
-      for (y=0; y < curs->height; y++)
+      for (y=0; y < srch; y++)
 	{
-	  memcpy(backing + (y * curs->width * 3), 
+	  memcpy(backing + (y * srcw * 3), 
 		 p, 
-		 (curs->width * 3));
+		 (srcw * 3));
 	  p += (MovieWidth * 3);
 	}
 
-      p = scratch + (MovieWidth * curs->y * 3) + (curs->x * 3);
+      p = scratch + (MovieWidth * srcy * 3) + (srcx * 3);
 
-      for (y=srcx; y < curs->height; y++)
+      i  = (abs(curs->y - srcy) * curs->width) + abs(curs->x - srcx);
+
+      for (y=0; y < srch; y++)
 	{
-	  for (x=srcy; x < curs->width; x++)
+	  for (x=0; x < srcw; x++)
 	    {
 	      unsigned char a, r, g, b;
 
@@ -159,9 +183,9 @@ cursor_to_scratch(Display       *xdpy,
 
 	      i++;
 	    }
-	  p += (( MovieWidth - curs->width ) * 3);
+	  p += (( MovieWidth - srcw ) * 3);
+	  i += (curs->width - srcw);
 	}
-
     }
 }
 
@@ -387,8 +411,6 @@ main(int argc, char **argv)
 	  XDamageNotifyEvent *dev;
 	  
 	  XNextEvent(xdpy, &xev);
-
-
 	  
 	  if (xev.type == damage_ev + XDamageNotify) 
 	    {
@@ -404,10 +426,7 @@ main(int argc, char **argv)
 					  0, &flv_data);
 
 		  /* clear the cursor from scratch */
-		  /*
-		  */
 
-		  printf("wrote (dam) timestamp as %i ( %i - %i )\n", dev->timestamp - init_timestamp, dev->timestamp, init_timestamp );
 		  if (!init_timestamp)
 		    init_timestamp = dev->timestamp;
 		  NFrames++;
@@ -425,12 +444,8 @@ main(int argc, char **argv)
 				      xev.xmotion.time - init_timestamp : 0, 
 				      0, &flv_data);
 
-	      printf("wrote (mo) timestamp as %i\n", xev.xmotion.time - init_timestamp);
-
-
-
 	      if (!init_timestamp)
-		init_timestamp = dev->timestamp;
+		init_timestamp = xev.xmotion.time;
 
 	      NFrames++;
 	    }

@@ -1,0 +1,5 @@
+2005-03-22  mallum,,,  <mallum@openedhand.com>
+
+	* xideo.c: (cursor_clear_scratch), (cursor_to_scratch), (main):
+	Fix cursor offscreen crashes. Cursor code is still v messy
+
