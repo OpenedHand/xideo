@@ -27,7 +27,7 @@
  *
  * Then build with something like;
  *
- * gcc -Wall foo.c -o foo ` pkg-config --libs --cflags xdamage` -lflv -lming
+ * gcc -Wall xideo.c -o xideo `pkg-config --libs --cflags xdamage` -lflv -lming
  *
  * You then run like, 'foo mymovie', Recording will start after 5 secs.
  * Hit Ctrl-c to stop recording. You should then a created mymove.flv and
@@ -115,7 +115,7 @@ cursor_to_scratch(Display       *xdpy,
   if ((curs = XFixesGetCursorImage (xdpy)) != NULL)
     {
       unsigned char *p;
-      int x, y, i = 0, srcw = 0, srch = 0, srcx = 0, srcy = 0, dstx =0, dsty =0 ;
+      int x, y, i = 0, srcw = 0, srch = 0, srcx = 0, srcy = 0;
       if (curs->x + curs->width < 0 || curs->y + curs->height < 0
 	  || curs->x > MovieWidth || curs->y > MovieHeight)
 	return; 		/* offscreen */
@@ -328,15 +328,13 @@ main(int argc, char **argv)
   Display          *xdpy;
   int               xscr;
   Window            xrootwin;
-  int               err, damage_ev, init_timestamp = 0 ,i, x, y;
+  int               err, damage_ev, init_timestamp = 0 ,i;
   Damage            damage;
 
   unsigned char    *scratch;
   Stream           *vid_stream;
   FlvStream        *flv_stream;
   struct pixel_data flv_data;
-
-  unsigned char    *p = NULL;
 
   if (argc < 2) 
     {
