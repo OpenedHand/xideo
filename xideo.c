@@ -58,15 +58,14 @@
 #define abs(x) ((x) > 0 ? (x) : -1*(x))
 
 /* Globals needed by sig handler */
-char *OutputSWF = NULL;
-char *OutputFLV = NULL;
-int   NFrames   = 0;
-int   MovieWidth;
-int   MovieHeight;
+char        *OutputSWF = NULL;
+char        *OutputFLV = NULL;
+int          NFrames   = 0;
+unsigned int MovieWidth;
+unsigned int MovieHeight;
 
 unsigned char *backing = NULL;
 int backingx = 0, backingy = 0, backingw = 0, backingh = 0; 
-
 int curs_width = 0, curs_height = 0;
 
 typedef unsigned short ush;
@@ -322,13 +321,72 @@ catch_int(int sig_num)
   exit(0);
 }
 
+Window 
+user_select_window (Display *dpy, int screen)
+{
+  /* func based on xprop code - Copyright 1993, 1998  The Open Group */
+  int    status;
+  Cursor cursor;
+  XEvent event;
+  Window target_win = None, root = RootWindow(dpy,screen);
+  int buttons = 0;
+
+  /* Make the target cursor */
+  cursor = XCreateFontCursor(dpy, XC_crosshair);
+
+  /* Grab the pointer using target cursor, letting it room all over */
+  status = XGrabPointer(dpy, root, False,
+			ButtonPressMask|ButtonReleaseMask, GrabModeSync,
+			GrabModeAsync, root, cursor, CurrentTime);
+
+  if (status != GrabSuccess)
+    {
+      fprintf(stderr, "*Error* Unable to grab pointer\n");
+      return None;
+    }
+
+  /* Let the user select a window... */
+  while ((target_win == None) || (buttons != 0)) 
+    {
+      /* allow one more event */
+      XAllowEvents(dpy, SyncPointer, CurrentTime);
+      XWindowEvent(dpy, root, ButtonPressMask|ButtonReleaseMask, &event);
+      switch (event.type) 
+	{
+	case ButtonPress:
+	  if (target_win == None) 
+	    target_win = event.xbutton.subwindow; /* window selected */
+	  if (target_win == None) 
+	    target_win = root;
+	  buttons++;
+	  break;
+	case ButtonRelease:
+	  /* there may have been some down before we started */
+	  if (buttons > 0)
+	    buttons--;
+	  break;
+	}
+    } 
+
+  XUngrabPointer(dpy, CurrentTime); 
+
+  return target_win;
+}
+
+void
+usage (char *progname)
+{
+  fprintf(stderr, "%s usage: %s [--rootwin|-r] <output basename>\n", progname, progname); 
+  exit(-1);
+}
+
 int
-main(int argc, char **argv)
+main (int argc, char **argv)
 {
   Display          *xdpy;
   int               xscr;
-  Window            xrootwin;
-  int               err, damage_ev, init_timestamp = 0 ,i;
+  Window            xrootwin, target_win = None;
+  int               err, damage_ev, init_timestamp = 0 ,i = 1;
   Damage            damage;
 
   unsigned char    *scratch;
@@ -337,16 +395,7 @@ main(int argc, char **argv)
   struct pixel_data flv_data;
 
   if (argc < 2) 
-    {
-      fprintf(stderr, "%s usage: %s <output basename>\n", argv[0], argv[0]); 
-      exit(-1);
-    }
-  
-  OutputSWF = malloc(strlen(argv[1])+5);
-  sprintf(OutputSWF, "%s.swf", argv[1]);
-
-  OutputFLV = malloc(strlen(argv[1])+5);
-  sprintf(OutputFLV, "%s.flv", argv[1]);
+    usage (argv[0])
 
   if ((xdpy = XOpenDisplay(getenv("DISPLAY"))) == NULL)
     {
@@ -356,11 +405,44 @@ main(int argc, char **argv)
 
   xscr = DefaultScreen(xdpy);
   xrootwin = RootWindow(xdpy, xscr);
+  
+  if (!strcmp(argv[1], "--rootwin") || !strcmp(argv[1], "-r"))
+    {
+      if (argc < 3)
+	usage(argv[0]);
+      i++;
+    }
+  else 
+    target_win == user_select_window (xdpy, xscr);
 
-  XSelectInput(xdpy, xrootwin, PointerMotionMask);
+  if (target_win == None)
+    target_win = xrootwin;
 
-  MovieWidth  = DisplayWidth(xdpy, xscr);
-  MovieHeight = DisplayHeight(xdpy, xscr);
+  OutputSWF = malloc(strlen(argv[i])+5);
+  sprintf(OutputSWF, "%s.swf", argv[i]);
+
+  OutputFLV = malloc(strlen(argv[i])+5);
+  sprintf(OutputFLV, "%s.flv", argv[i]);
+
+  {
+    int          fooi;
+    unsigned int foo;
+
+    /* FIXME: should trap X error here */
+    if (!XGetGeometry (xdpy, 
+		       target_win, 
+		       &xrootwin, 
+		       &fooi, &fooi
+		       &MovieWidth, &MovieHeight,
+		       &foo, &foo))
+      {
+	fprintf(stderr, 
+		"*Error* failed to get target window geometry, giving up\n");
+	return 1;
+      }
+  }
+
+  XSelectInput(xdpy, target_win, PointerMotionMask);
 
   if (!XDamageQueryExtension (xdpy, &damage_ev, &err))
     {
@@ -381,7 +463,7 @@ main(int argc, char **argv)
 
   scratch = init_scratch_pixbuf (MovieWidth, MovieHeight);
 
-  damage = XDamageCreate (xdpy, xrootwin,  XDamageReportBoundingBox);
+  damage = XDamageCreate (xdpy, target_win,  XDamageReportBoundingBox);
 
   vid_stream = ScreenVideo_newStream(MovieWidth, 
 				     MovieHeight,

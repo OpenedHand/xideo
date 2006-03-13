@@ -1,3 +1,9 @@
+2006-03-13  Matthew Allum  <mallum@openedhand.com>
+
+	reviewed by: <delete if not using a buddy>
+
+	* xideo.c: (catch_int), (user_select_window), (usage), (main):
+
 2005-03-22  mallum,,,  <mallum@openedhand.com>
 
 	* xideo.c: (cursor_clear_scratch), (cursor_to_scratch), (main):
