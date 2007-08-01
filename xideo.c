@@ -7,7 +7,7 @@
  *
  * It intended for creating demos of software for easy playback in a web 
  * browser. 
-
+ *
  * Authored by Matthew Allum <mallum@o-hand.com>
  * Licensed under the GPL v2 or greater.
  *
